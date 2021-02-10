@@ -23,16 +23,33 @@ const (
 	/**
 	用户公开的视频地址
 	*/
-	UserInfoUrl   = "https://www.91porn.com/uprofile.php?UID=$"
-	GirlPublicUrl = "https://www.91porn.com/uvideos.php?UID=$&type=public"
-	VideoM3U8Url  = "https://cdn.91p07.com/m3u8/$/$.m3u8"
-	VideoMP4Url   = "https://ccn.91p52.com/mp43/$.mp4"
-	VideoUrl      = "https://www.91porn.com/view_video.php?viewkey="
+	UserInfoUrl     = "https://www.91porn.com/uprofile.php?UID=$"
+	GirlPublicUrl   = "https://www.91porn.com/uvideos.php?UID=$&type=public"
+	VideoM3U8Url    = "https://cdn.91p07.com/m3u8/$/$.m3u8"
+	VideoMP4Url     = "https://ccn.91p52.com/mp43/$.mp4"
+	VideoUrl        = "https://www.91porn.com/view_video.php?viewkey="
+	HotVideIndexUrl = "https://91porn.com/v.php"
 )
 
+/**
+用户ID
+*/
 var uid string
+
+/**
+视频ID
+*/
 var vid string
+
+/**
+保存地址
+*/
 var savePath string
+
+/**
+类型
+*/
+var hotVideoType string
 
 /**
 功能：下载https://www.91porn.com/ 某个大V用户视频
@@ -41,9 +58,12 @@ var savePath string
 func main() {
 	flag.StringVar(&savePath, "p", "/data/91movie/", "下载的视频存放目录")
 	savePath = savePath + "/"
-	flag.StringVar(&uid, "uid", "", "用户ID，例如https://www.91porn.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul ，-uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul")
-	flag.StringVar(&vid, "vid", "", "视频ID，例如https://www.91porn.com/view_video.php?viewkey=8ee92162ba6b47e1dfcf， -vid=8ee92162ba6b47e1dfcf")
+	flag.StringVar(&uid, "uid", "", "用户ID，https://www.91porn.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul ，例如 -uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul")
+	flag.StringVar(&hotVideoType, "t", "", "视频类型1：当前最热 2：本月最热 3：10分钟以上 4：20分钟以上 5：本月收藏 6： 收藏最多 7：最近加精 8：高清 9：上月最热 10：本月讨论 ，例如 -t=1")
+
+	flag.StringVar(&vid, "vid", "", "视频ID，https://www.91porn.com/view_video.php?viewkey=8ee92162ba6b47e1dfcf， 例如 -vid=8ee92162ba6b47e1dfcf")
 	flag.Parse()
+
 	if uid != "" {
 		pageNumber := getUserVideoPage(uid)
 		for i := 1; i <= pageNumber; i++ {
@@ -51,11 +71,69 @@ func main() {
 		}
 		return
 	}
+
 	if vid != "" {
 		downloadSingleVideo(VideoUrl + vid)
 		return
 	}
+
+	if hotVideoType != "" {
+		downLoadHotVideo(hotVideoType)
+		return
+	}
+
 	fmt.Println("excute end")
+}
+
+func downLoadHotVideo(videoTypeStr string) {
+	res, err := http.Get(HotVideIndexUrl)
+	if err != nil {
+		log.Println(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		log.Println("status code error: %d %s", res.StatusCode, res.Status)
+	}
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Println(err)
+	}
+	//https://www.91porn.com/v.php?category=hot&viewtype=basic
+	hotVoideoLinkNode := doc.Find(".navbar-right").Find("a")
+	if hotVoideoLinkNode != nil && len(hotVoideoLinkNode.Nodes) > 0 {
+		videoType, _ := strconv.Atoi(videoTypeStr)
+		//视频从第6个开始
+		linkUrl := hotVoideoLinkNode.Get(videoType + 5).Attr[0].Val
+		fmt.Println(linkUrl)
+		flag := true
+		pageNumer := 1
+		for flag {
+			res, err := http.Get(linkUrl + "&page=" + strconv.FormatInt(int64(pageNumer), 10))
+			if err != nil {
+				log.Println(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != 200 {
+				log.Println("status code error: %d %s", res.StatusCode, res.Status)
+			}
+			doc, err := goquery.NewDocumentFromReader(res.Body)
+			if err != nil {
+				log.Println(err)
+			}
+			//https://www.91porn.com/v.php?category=hot&viewtype=basic
+			doc.Find(".videos-text-align").Each(func(i int, s *goquery.Selection) {
+				url, _ := s.Find("a").Attr("href")
+				downloadSingleVideo(url)
+			})
+			maxPageNumberStr, _ := doc.Find(".page_number").Attr("size")
+			maxPageNumber, _ := strconv.Atoi(maxPageNumberStr)
+			if pageNumer >= maxPageNumber {
+				fmt.Println("break pageNumer=", pageNumer)
+				break
+			}
+			pageNumer++
+		}
+	}
 }
 
 /**

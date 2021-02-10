@@ -1,6 +1,7 @@
 # 91pornTrack
     国外pornhub下载要收费，so只能对国内91porn的下手了
     
+* 支持下载91热门视频    
 * 支持下载91某个用户的所有公开视频
 * 支持下载91某个网址的视频
 
@@ -25,6 +26,8 @@
    部分视频下载需要登陆状态，所以需要安装chrome后，再登陆下。
 ### 所有参数
      ./track --help
+### 下载热门视频
+    ./track -t=1
 ### 下载某个用户所有视频
     ./track -uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul
 ### 下载某个网址视频
