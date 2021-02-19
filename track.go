@@ -312,6 +312,8 @@ func downLoadOld(videoMP4Url string, saveFilePath string, url string) {
 
 	fmt.Println("download old video:", videoMP4Url)
 	//videoMP4Url 不可以用，需要动态获取
+
+	videoMP4Url = strings.ReplaceAll(videoMP4Url, "ccn.91p52.com", "cv.91p52.com")
 	resp, err := http.Get(videoMP4Url)
 	if err != nil {
 		//panic(err)
@@ -329,6 +331,8 @@ func downLoadOld(videoMP4Url string, saveFilePath string, url string) {
 ffmpeg -i https://cdn.91p07.com//m3u8/424352/424352.m3u8 -c copy -bsf:a aac_adtstoasc output2.mp4
 */
 func downLoadNew(videoUrl string, saveFilePath string) {
+	//vip地址
+	videoUrl = strings.ReplaceAll(videoUrl, "cdn.91p07.com", "cv.91p52.com")
 	binary, lookErr := exec.LookPath("ffmpeg")
 	if lookErr != nil {
 		panic(lookErr)
@@ -361,6 +365,7 @@ https://ccn.91p52.com/mp43/384739.mp4
 https://cdn.91p07.com//m3u8/425408/425408.m3u8
 */
 func checkVideoUrlIsOld(url string) bool {
+	url = strings.ReplaceAll(url, "cdn.91p07.com", "cv.91p52.com")
 	res, err := http.Get(url)
 	if err != nil {
 		log.Println(err)
