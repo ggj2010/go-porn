@@ -28,7 +28,7 @@ const (
 	VideoM3U8Url    = "https://cdn.91p07.com/m3u8/$/$.m3u8"
 	VideoMP4Url     = "https://ccn.91p52.com/mp43/$.mp4"
 	VideoUrl        = "https://www.91porn.com/view_video.php?viewkey="
-	HotVideIndexUrl = "https://91porn.com/v.php"
+	HotVideIndexUrl = "https://91porn.com/v.php?"
 )
 
 /**
@@ -59,7 +59,7 @@ func main() {
 	flag.StringVar(&savePath, "p", "/data/91movie/", "下载的视频存放目录")
 	savePath = savePath + "/"
 	flag.StringVar(&uid, "uid", "", "用户ID，https://www.91porn.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul ，例如 -uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul")
-	flag.StringVar(&hotVideoType, "t", "", "视频类型1：当前最热 2：本月最热 3：10分钟以上 4：20分钟以上 5：本月收藏 6： 收藏最多 7：最近加精 8：高清 9：上月最热 10：本月讨论 ，例如 -t=1")
+	flag.StringVar(&hotVideoType, "t", "", "视频类型0:所有 1：当前最热 2：本月最热 3：10分钟以上 4：20分钟以上 5：本月收藏 6： 收藏最多 7：最近加精 8：高清 9：上月最热 10：本月讨论 ，例如 -t=1")
 
 	flag.StringVar(&vid, "vid", "", "视频ID，https://www.91porn.com/view_video.php?viewkey=8ee92162ba6b47e1dfcf， 例如 -vid=8ee92162ba6b47e1dfcf")
 	flag.Parse()
@@ -104,6 +104,9 @@ func downLoadHotVideo(videoTypeStr string) {
 		videoType, _ := strconv.Atoi(videoTypeStr)
 		//视频从第6个开始
 		linkUrl := hotVoideoLinkNode.Get(videoType + 5).Attr[0].Val
+		if videoType == 0 {
+			linkUrl = HotVideIndexUrl
+		}
 		fmt.Println(linkUrl)
 		flag := true
 		pageNumer := 1
@@ -125,8 +128,10 @@ func downLoadHotVideo(videoTypeStr string) {
 				url, _ := s.Find("a").Attr("href")
 				downloadSingleVideo(url)
 			})
-			maxPageNumberStr, _ := doc.Find(".page_number").Attr("size")
-			maxPageNumber, _ := strconv.Atoi(maxPageNumberStr)
+			//最大分页数不准确，只能设置默认最大的
+			//maxPageNumberStr, _ := doc.Find(".page_number").Attr("size")
+			//maxPageNumber, _ := strconv.Atoi(maxPageNumberStr)
+			maxPageNumber := 10000
 			if pageNumer >= maxPageNumber {
 				fmt.Println("break pageNumer=", pageNumer)
 				break

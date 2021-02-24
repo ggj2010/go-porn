@@ -18,16 +18,31 @@
    
      部分网络可能访问不了91pron,所以执行程序前最好翻墙下
      https://portal.shadowsocks.nz/aff.php?aff=20093
+   4、登陆
    
-   4、build
+      部分视频下载需要登陆状态，所以注册91pron账号，再登陆下。
+      
+   5、build
    
     go build track.go 
 ## Examples
-   部分视频下载需要登陆状态，所以需要安装chrome后，再登陆下。
+   
 ### 所有参数
      ./track --help
 ### 下载热门视频
     ./track -t=1
+    视频类型
+    0:所有 
+    1：当前最热 
+    2：本月最热 
+    3：10分钟以上 
+    4：20分钟以上 
+    5：本月收藏
+    6： 收藏最多 
+    7：最近加精 
+    8：高清 
+    9：上月最热 
+    10：本月讨论 
 ### 下载某个用户所有视频
     ./track -uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul
 ### 下载某个网址视频
