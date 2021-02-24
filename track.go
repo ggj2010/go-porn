@@ -29,6 +29,8 @@ const (
 	VideoMP4Url     = "https://ccn.91p52.com/mp43/$.mp4"
 	VideoUrl        = "https://www.91porn.com/view_video.php?viewkey="
 	HotVideIndexUrl = "https://91porn.com/v.php?"
+	//ffmpeg下载超时时间5分钟
+	FfmpegTimeOut = 5 * 60 * 1000000
 )
 
 /**
@@ -268,10 +270,10 @@ func downLoad(vid string, title string, userName string, url string) {
 	videoMP4Url := strings.ReplaceAll(VideoMP4Url, "$", vid)
 	saveFilePath := savePath + userName + "/" + title + ".mp4"
 	if checkFileExists(saveFilePath) {
-		fmt.Printf("【 %s 】video exists,skip downlaod \n", saveFilePath)
+		fmt.Printf("【 %s 】video exists,skip download \n", saveFilePath)
 		return
 	}
-	fmt.Printf("download video begin video=%s \n", title)
+	fmt.Printf("download video begin video=%s \n", saveFilePath)
 	//是否是老的视频
 	if checkVideoUrlIsOld(videoUrl) {
 		downLoadOld(videoMP4Url, saveFilePath, url)
@@ -322,6 +324,7 @@ func downLoadOld(videoMP4Url string, saveFilePath string, url string) {
 	resp, err := http.Get(videoMP4Url)
 	if err != nil {
 		//panic(err)
+		return
 	}
 	defer resp.Body.Close()
 	data, err := ioutil.ReadAll(resp.Body)
@@ -343,6 +346,8 @@ func downLoadNew(videoUrl string, saveFilePath string) {
 		panic(lookErr)
 	}
 	args := []string{
+		"-rw_timeout",
+		strconv.Itoa(FfmpegTimeOut),
 		"-i",
 		videoUrl,
 		"-acodec",
