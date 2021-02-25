@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"golang.org/x/net/context"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strconv"
+	"text/template"
 	"time"
 
 	//https://github.com/PuerkitoBio/goquery
@@ -32,6 +34,22 @@ const (
 	//ffmpeg下载超时时间5分钟
 	FfmpegTimeOut = 5 * 60 * 1000000
 )
+
+var videoList = make([]Video, 0)
+
+var videoTypeMap = map[int]string{
+	0:  "所有",
+	1:  "当前最热",
+	2:  "本月最热",
+	3:  "10分钟以上",
+	4:  "20分钟以上",
+	5:  "本月收藏",
+	6:  "收藏最多",
+	7:  "最近加精",
+	8:  "高清",
+	9:  "本月讨论",
+	10: "10分钟以上",
+}
 
 /**
 用户ID
@@ -81,10 +99,33 @@ func main() {
 
 	if hotVideoType != "" {
 		downLoadHotVideo(hotVideoType)
+		buildIndex()
 		return
 	}
 
 	fmt.Println("excute end")
+}
+
+/**
+创建索引
+*/
+func buildIndex() {
+	videoType, _ := strconv.Atoi(hotVideoType)
+	videTypeName := videoTypeMap[videoType]
+	if len(videoList) > 0 {
+		videolist := VideoList{Videolist: videoList}
+		tmpl, err := template.ParseFiles("index.go.tpl")
+		if err != nil {
+		}
+		indexHtmlSavePath := savePath + "/" + videTypeName + ".html"
+		//存在
+		if err == nil {
+			os.Remove(indexHtmlSavePath)
+		}
+		file, err := os.OpenFile(indexHtmlSavePath, os.O_CREATE|os.O_WRONLY, 0755)
+		_, err = os.Stat(indexHtmlSavePath)
+		err = tmpl.Execute(file, videolist)
+	}
 }
 
 func downLoadHotVideo(videoTypeStr string) {
@@ -106,12 +147,14 @@ func downLoadHotVideo(videoTypeStr string) {
 		videoType, _ := strconv.Atoi(videoTypeStr)
 		//视频从第6个开始
 		linkUrl := hotVoideoLinkNode.Get(videoType + 5).Attr[0].Val
+		maxPageNumber := 5000
 		if videoType == 0 {
 			linkUrl = HotVideIndexUrl
 		}
 		fmt.Println(linkUrl)
 		flag := true
 		pageNumer := 1
+		viewMap := make(map[string]string)
 		for flag {
 			res, err := http.Get(linkUrl + "&page=" + strconv.FormatInt(int64(pageNumer), 10))
 			if err != nil {
@@ -127,13 +170,20 @@ func downLoadHotVideo(videoTypeStr string) {
 			}
 			//https://www.91porn.com/v.php?category=hot&viewtype=basic
 			doc.Find(".videos-text-align").Each(func(i int, s *goquery.Selection) {
-				url, _ := s.Find("a").Attr("href")
-				downloadSingleVideo(url)
+				urls, _ := s.Find("a").Attr("href")
+				values, err := url.ParseQuery(urls)
+				if err == nil {
+					viewkey := values.Get("https://91porn.com/view_video.php?viewkey")
+					//存在重复的 直接跳出循环，解决分页问题
+					if viewMap[viewkey] != "" {
+						flag = false
+						fmt.Println("repeate skip")
+						return
+					}
+					viewMap[viewkey] = viewkey
+				}
+				downloadSingleVideo(urls)
 			})
-			//最大分页数不准确，只能设置默认最大的
-			//maxPageNumberStr, _ := doc.Find(".page_number").Attr("size")
-			//maxPageNumber, _ := strconv.Atoi(maxPageNumberStr)
-			maxPageNumber := 10000
 			if pageNumer >= maxPageNumber {
 				fmt.Println("break pageNumer=", pageNumer)
 				break
@@ -200,7 +250,7 @@ func downloadAllVideo(userId string, pageNumber int) {
 https://www.91porn.com/view_video.php?viewkey=d2e97bf0276d3f7ed6b0
 */
 func downloadSingleVideo(url string) {
-	fmt.Printf("excute [%s] page track", url)
+	fmt.Printf("excute [%s] page track \n", url)
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("accept-language", "zh-CN")
@@ -229,13 +279,19 @@ func downloadSingleVideo(url string) {
 		title = userTitleNodes.Nodes[0].FirstChild.Data
 		title = strings.Trim(title, " ")
 	}
+	//
 
+	imageNodes := doc.Find("#player_one")
+	videoImage := ""
+	if imageNodes != nil && len(imageNodes.Nodes) > 0 {
+		videoImage, _ = imageNodes.Attr("poster")
+	}
 	//获取m3u8视频ID
 	nodes := doc.Find("#VID")
 	if nodes != nil && len(nodes.Nodes) > 0 {
 		vid := nodes.Nodes[1].FirstChild.Data
 		createParentFile(userName)
-		downLoad(vid, title, userName, url)
+		downLoad(vid, title, userName, url, videoImage)
 	} else {
 		fmt.Println("skip video", url)
 	}
@@ -265,10 +321,14 @@ func checkFileExists(path string) bool {
 /**
 下载视频
 */
-func downLoad(vid string, title string, userName string, url string) {
+func downLoad(vid string, title string, userName string, url string, videoImage string) {
 	videoUrl := strings.ReplaceAll(VideoM3U8Url, "$", vid)
 	videoMP4Url := strings.ReplaceAll(VideoMP4Url, "$", vid)
 	saveFilePath := savePath + userName + "/" + title + ".mp4"
+
+	if hotVideoType != "" {
+		videoList = append(videoList, Video{ImgUrl: videoImage, Title: title, Path: saveFilePath})
+	}
 	if checkFileExists(saveFilePath) {
 		fmt.Printf("【 %s 】video exists,skip download \n", saveFilePath)
 		return
@@ -385,4 +445,14 @@ func checkVideoUrlIsOld(url string) bool {
 		return true
 	}
 	return false
+}
+
+type Video struct {
+	ImgUrl string `json:"imgUrl"`
+	Title  string `json:"title"`
+	Path   string `json:"path"`
+}
+
+type VideoList struct {
+	Videolist []Video
 }
