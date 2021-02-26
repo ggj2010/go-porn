@@ -172,12 +172,13 @@ func downLoadHotVideo(videoTypeStr string) {
 			doc.Find(".videos-text-align").Each(func(i int, s *goquery.Selection) {
 				urls, _ := s.Find("a").Attr("href")
 				values, err := url.ParseQuery(urls)
-				if err == nil {
+				//videoType为0 可能执行的时候又有视频创建导致提前重复
+				if videoType != 0 && err == nil {
 					viewkey := values.Get("https://91porn.com/view_video.php?viewkey")
 					//存在重复的 直接跳出循环，解决分页问题
 					if viewMap[viewkey] != "" {
 						flag = false
-						fmt.Println("repeate skip")
+						fmt.Println("repeate skip key=", viewkey)
 						return
 					}
 					viewMap[viewkey] = viewkey

@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-LCPyFKQyML7mqtS+4XytolfqyqSlcbB3bvDuH9vX2sdQMxRonb/M3b9EmhCNNNrV" crossorigin="anonymous"></script>
 </head>
 <body>
+<div class="row">
 {{range .Videolist }}
     <div class="col-sm-6 col-md-2">
        <div class="card" style="width: 18rem;">
@@ -19,5 +20,6 @@
        </div>
     </div>
 {{ end }}
+ </div>
 </body>
 </html>
