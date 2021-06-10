@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"golang.org/x/net/context"
+	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -25,12 +26,12 @@ const (
 	/**
 	用户公开的视频地址
 	*/
-	UserInfoUrl     = "https://www.91porn.com/uprofile.php?UID=$"
-	GirlPublicUrl   = "https://www.91porn.com/uvideos.php?UID=$&type=public"
+	UserInfoUrl     = "https://www.xx.com/uprofile.php?UID=$"
+	GirlPublicUrl   = "https://www.xx.com/uvideos.php?UID=$&type=public"
 	VideoM3U8Url    = "https://cdn.91p07.com/m3u8/$/$.m3u8"
 	VideoMP4Url     = "https://ccn.91p52.com/mp43/$.mp4"
-	VideoUrl        = "https://www.91porn.com/view_video.php?viewkey="
-	HotVideIndexUrl = "https://91porn.com/v.php?"
+	VideoUrl        = "https://www.xx.com/view_video.php?viewkey="
+	HotVideIndexUrl = "https://www.xx.com/v.php?"
 	//ffmpeg下载超时时间5分钟
 	FfmpegTimeOut = 5 * 60 * 1000000
 )
@@ -60,6 +61,7 @@ var uid string
 视频ID
 */
 var vid string
+var pNumber string
 
 /**
 保存地址
@@ -82,6 +84,8 @@ func main() {
 	flag.StringVar(&hotVideoType, "t", "", "视频类型0:所有 1：当前最热 2：本月最热 3：10分钟以上 4：20分钟以上 5：本月收藏 6： 收藏最多 7：最近加精 8：高清 9：上月最热 10：本月讨论 ，例如 -t=1")
 
 	flag.StringVar(&vid, "vid", "", "视频ID，https://www.91porn.com/view_video.php?viewkey=8ee92162ba6b47e1dfcf， 例如 -vid=8ee92162ba6b47e1dfcf")
+
+	flag.StringVar(&pNumber, "n", "0", "历史数据爬去分页 例如 -n=2000")
 	flag.Parse()
 
 	if uid != "" {
@@ -129,17 +133,32 @@ func buildIndex() {
 }
 
 func downLoadHotVideo(videoTypeStr string) {
-	res, err := http.Get(HotVideIndexUrl)
-	if err != nil {
-		log.Println(err)
+	options := []chromedp.ExecAllocatorOption{
+		chromedp.Flag("headless", true),
+		chromedp.Flag("hide-scrollbars", false),
+		chromedp.Flag("mute-audio", false),
+		chromedp.UserAgent(`Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36`),
 	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		log.Println("status code error: %d %s", res.StatusCode, res.Status)
-	}
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	options = append(chromedp.DefaultExecAllocatorOptions[:], options...)
+	chromeCtx, cancel := chromedp.NewExecAllocator(context.Background(), options...)
+
+	ctx, cancel := chromedp.NewContext(chromeCtx)
+	defer cancel()
+	var htmlContent string
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(HotVideIndexUrl),
+		//等待某个特定的元素出现
+		//chromedp.Sleep(2 * time.Second),
+		chromedp.OuterHTML(`document.querySelector("body")`, &htmlContent, chromedp.ByJSPath),
+		//生成最终的html文件并保存在htmlContent文件中
+	)
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
+		log.Fatal(err)
 	}
 	//https://www.91porn.com/v.php?category=hot&viewtype=basic
 	hotVoideoLinkNode := doc.Find(".navbar-right").Find("a")
@@ -147,24 +166,41 @@ func downLoadHotVideo(videoTypeStr string) {
 		videoType, _ := strconv.Atoi(videoTypeStr)
 		//视频从第6个开始
 		linkUrl := hotVoideoLinkNode.Get(videoType + 5).Attr[0].Val
-		maxPageNumber := 5000
+		maxPageNumber := 6000
 		if videoType == 0 {
 			linkUrl = HotVideIndexUrl
 		}
 		fmt.Println(linkUrl)
 		flag := true
-		pageNumer := 1
+		//pageNumer :=
+		pageNumer, _ := strconv.Atoi(pNumber)
 		viewMap := make(map[string]string)
 		for flag {
-			res, err := http.Get(linkUrl + "&page=" + strconv.FormatInt(int64(pageNumer), 10))
+			options := []chromedp.ExecAllocatorOption{
+				chromedp.Flag("headless", true),
+				chromedp.Flag("hide-scrollbars", false),
+				chromedp.Flag("mute-audio", false),
+				chromedp.UserAgent(`Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36`),
+			}
+			options = append(chromedp.DefaultExecAllocatorOptions[:], options...)
+			chromeCtx, cancel := chromedp.NewExecAllocator(context.Background(), options...)
+
+			ctx, cancel := chromedp.NewContext(chromeCtx)
+			err := chromedp.Run(ctx,
+				chromedp.Navigate(linkUrl+"&page="+strconv.FormatInt(int64(pageNumer), 10)),
+				//等待某个特定的元素出现
+				//chromedp.Sleep(2 * time.Second),
+				chromedp.OuterHTML(`document.querySelector("body")`, &htmlContent, chromedp.ByJSPath),
+				//生成最终的html文件并保存在htmlContent文件中
+			)
 			if err != nil {
-				log.Println(err)
+				log.Fatal(err)
 			}
-			defer res.Body.Close()
-			if res.StatusCode != 200 {
-				log.Println("status code error: %d %s", res.StatusCode, res.Status)
+
+			doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+			if err != nil {
+				log.Fatal(err)
 			}
-			doc, err := goquery.NewDocumentFromReader(res.Body)
 			if err != nil {
 				log.Println(err)
 			}
@@ -190,6 +226,7 @@ func downLoadHotVideo(videoTypeStr string) {
 				break
 			}
 			pageNumer++
+			cancel()
 		}
 	}
 }
@@ -198,9 +235,20 @@ func downLoadHotVideo(videoTypeStr string) {
 获取用户公开视频分页数量
 */
 func getUserVideoPage(uid string) int {
+
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	if err != nil {
+		fmt.Println("Error connecting to proxy:", err)
+	}
+	tr := &http.Transport{Dial: dialSocksProxy.Dial}
+
+	// Create client
+	myClient := &http.Client{
+		Transport: tr,
+	}
 	pageSize := 8
 	url := strings.ReplaceAll(UserInfoUrl, "$", uid)
-	res, err := http.Get(url)
+	res, err := myClient.Get(url)
 	if err != nil {
 		log.Println(err)
 	}
@@ -225,9 +273,19 @@ func getUserVideoPage(uid string) int {
 https://www.91porn.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul&type=public&page=2
 */
 func downloadAllVideo(userId string, pageNumber int) {
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	if err != nil {
+		fmt.Println("Error connecting to proxy:", err)
+	}
+	tr := &http.Transport{Dial: dialSocksProxy.Dial}
+
+	// Create client
+	myClient := &http.Client{
+		Transport: tr,
+	}
 	url := strings.ReplaceAll(GirlPublicUrl, "$", userId)
 	url = url + "&page=" + strconv.FormatInt(int64(pageNumber), 10)
-	res, err := http.Get(url)
+	res, err := myClient.Get(url)
 	if err != nil {
 		log.Println(err)
 	}
@@ -251,11 +309,21 @@ func downloadAllVideo(userId string, pageNumber int) {
 https://www.91porn.com/view_video.php?viewkey=d2e97bf0276d3f7ed6b0
 */
 func downloadSingleVideo(url string) {
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	if err != nil {
+		fmt.Println("Error connecting to proxy:", err)
+	}
+	tr := &http.Transport{Dial: dialSocksProxy.Dial}
+
+	// Create client
+	myClient := &http.Client{
+		Transport: tr,
+	}
+
 	fmt.Printf("excute [%s] page track \n", url)
-	client := &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("accept-language", "zh-CN")
-	res, err := client.Do(req)
+	res, err := myClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -270,7 +338,7 @@ func downloadSingleVideo(url string) {
 
 	userNameNodes := doc.Find(".title")
 	userName := ""
-	if userNameNodes != nil && len(userNameNodes.Nodes) > 0 {
+	if userNameNodes != nil && len(userNameNodes.Nodes) > 0 && userNameNodes.Nodes[0].FirstChild != nil {
 		userName = userNameNodes.Nodes[0].FirstChild.Data
 	}
 
@@ -278,6 +346,9 @@ func downloadSingleVideo(url string) {
 	title := ""
 	if userTitleNodes != nil && len(userTitleNodes.Nodes) > 0 {
 		title = userTitleNodes.Nodes[0].FirstChild.Data
+		if title == " " {
+			title = userTitleNodes.Nodes[0].LastChild.Data
+		}
 		title = strings.Trim(title, " ")
 	}
 	//
@@ -294,6 +365,8 @@ func downloadSingleVideo(url string) {
 		createParentFile(userName)
 		downLoad(vid, title, userName, url, videoImage)
 	} else {
+		data, _ := ioutil.ReadAll(res.Body)
+		log.Println("status code error: %d %s %s", res.StatusCode, res.Status, string(data))
 		fmt.Println("skip video", url)
 	}
 }
@@ -331,7 +404,7 @@ func downLoad(vid string, title string, userName string, url string, videoImage 
 		videoList = append(videoList, Video{ImgUrl: videoImage, Title: title, Path: saveFilePath})
 	}
 	if checkFileExists(saveFilePath) {
-		fmt.Printf("【 %s 】video exists,skip download \n", saveFilePath)
+		fmt.Printf("【 %s 】video exists,skip download ", saveFilePath)
 		return
 	}
 	fmt.Printf("download video begin video=%s \n", saveFilePath)
@@ -374,7 +447,7 @@ func downLoadOld(videoMP4Url string, saveFilePath string, url string) {
 	if nodes != nil && len(nodes.Nodes) > 0 {
 		videoMP4Url, _ = nodes.Attr("src")
 	} else {
-		fmt.Println("get skip video", url)
+		fmt.Println("skip video", url)
 		return
 	}
 
@@ -401,7 +474,7 @@ ffmpeg -i https://cdn.91p07.com//m3u8/424352/424352.m3u8 -c copy -bsf:a aac_adts
 */
 func downLoadNew(videoUrl string, saveFilePath string) {
 	//vip地址
-	videoUrl = strings.ReplaceAll(videoUrl, "cdn.91p07.com", "cv.91p52.com")
+	//videoUrl = strings.ReplaceAll(videoUrl, "cdn.91p07.com", "cv.91p52.com")
 	binary, lookErr := exec.LookPath("ffmpeg")
 	if lookErr != nil {
 		panic(lookErr)
@@ -436,8 +509,19 @@ https://ccn.91p52.com/mp43/384739.mp4
 https://cdn.91p07.com//m3u8/425408/425408.m3u8
 */
 func checkVideoUrlIsOld(url string) bool {
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	if err != nil {
+		fmt.Println("Error connecting to proxy:", err)
+	}
+	tr := &http.Transport{Dial: dialSocksProxy.Dial}
+
+	// Create client
+	myClient := &http.Client{
+		Transport: tr,
+	}
+
 	url = strings.ReplaceAll(url, "cdn.91p07.com", "cv.91p52.com")
-	res, err := http.Get(url)
+	res, err := myClient.Get(url)
 	if err != nil {
 		log.Println(err)
 	}
