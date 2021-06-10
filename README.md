@@ -1,5 +1,5 @@
-# 91pornTrack
-    国外pornhub下载要收费，so只能对国内91porn的下手了。
+# xxpornTrack
+    国外pornhub下载要收费，so只能对国内xxporn的下手了。
 # 注意事项
     代码里面地址和谐了，需要自己加下。
     
@@ -18,11 +18,11 @@
      
    3、必须翻墙 
    
-     部分网络可能访问不了91pron,所以执行程序前最好翻墙下
+     部分网络可能访问不了xxpron,所以执行程序前最好翻墙下
      https://portal.shadowsocks.nz/aff.php?aff=20093
    4、登陆（废弃）
    
-      部分视频下载需要登陆状态，所以注册91pron账号，再登陆下。
+      部分视频下载需要登陆状态，所以注册xxpron账号，再登陆下。
       
    5、build
    
