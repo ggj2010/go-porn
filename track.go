@@ -26,12 +26,12 @@ const (
 	/**
 	用户公开的视频地址
 	*/
-	UserInfoUrl     = "https://www.xx.com/uprofile.php?UID=$"
-	GirlPublicUrl   = "https://www.xx.com/uvideos.php?UID=$&type=public"
+	UserInfoUrl     = "https://www.91porn.com/uprofile.php?UID=$"
+	GirlPublicUrl   = "https://www.91porn.com/uvideos.php?UID=$&type=public"
 	VideoM3U8Url    = "https://cdn.91p07.com/m3u8/$/$.m3u8"
 	VideoMP4Url     = "https://ccn.91p52.com/mp43/$.mp4"
-	VideoUrl        = "https://www.xx.com/view_video.php?viewkey="
-	HotVideIndexUrl = "https://www.xx.com/v.php?"
+	VideoUrl        = "https://www.91porn.com/view_video.php?viewkey="
+	HotVideIndexUrl = "https://www.91porn.com/v.php?"
 	//ffmpeg下载超时时间5分钟
 	FfmpegTimeOut = 5 * 60 * 1000000
 )
@@ -74,16 +74,29 @@ var savePath string
 var hotVideoType string
 
 /**
-功能：下载https://www.xx.com/ 某个大V用户视频
+功能：下载https://www.91porn.com/ 某个大V用户视频
 配置：视频合成依赖ffmpeg，所以需要先执行 brew install ffmpeg
 */
 func main() {
 	flag.StringVar(&savePath, "p", "/data/91movie/", "下载的视频存放目录")
 	savePath = savePath + "/"
-	flag.StringVar(&uid, "uid", "", "用户ID，https://www.xx.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul ，例如 -uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul")
-	flag.StringVar(&hotVideoType, "t", "", "视频类型0:所有 1：当前最热 2：本月最热 3：10分钟以上 4：20分钟以上 5：本月收藏 6： 收藏最多 7：最近加精 8：高清 9：上月最热 10：本月讨论 ，例如 -t=1")
+	flag.StringVar(&uid, "uid", "", "用户ID，https://www.91porn.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul ，例如 -uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul")
+	flag.StringVar(&hotVideoType, "t", "", "视频类型"+
+		"0:所有"+
+		"1: 91原创 "+
+		"2：当前最热 "+
+		"3：本月最热 "+
+		"4：10分钟以上 "+
+		"5：20分钟以上 "+
+		"6：本月收藏 "+
+		"7：收藏最多 "+
+		"8：最近加精 "+
+		"9：高清 "+
+		"10：上月最热 "+
+		"11：本月讨论 "+
+		"，例如 -t=1")
 
-	flag.StringVar(&vid, "vid", "", "视频ID，https://www.xx.com/view_video.php?viewkey=8ee92162ba6b47e1dfcf， 例如 -vid=8ee92162ba6b47e1dfcf")
+	flag.StringVar(&vid, "vid", "", "视频ID，https://www.91porn.com/view_video.php?viewkey=8ee92162ba6b47e1dfcf， 例如 -vid=8ee92162ba6b47e1dfcf")
 
 	flag.StringVar(&pNumber, "n", "0", "历史数据爬去分页 例如 -n=2000")
 	flag.Parse()
@@ -160,7 +173,7 @@ func downLoadHotVideo(videoTypeStr string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//https://www.xx.com/v.php?category=hot&viewtype=basic
+	//https://www.91porn.com/v.php?category=hot&viewtype=basic
 	hotVoideoLinkNode := doc.Find(".navbar-right").Find("a")
 	if hotVoideoLinkNode != nil && len(hotVoideoLinkNode.Nodes) > 0 {
 		videoType, _ := strconv.Atoi(videoTypeStr)
@@ -193,10 +206,10 @@ func downLoadHotVideo(videoTypeStr string) {
 				chromedp.OuterHTML(`document.querySelector("body")`, &htmlContent, chromedp.ByJSPath),
 				//生成最终的html文件并保存在htmlContent文件中
 			)
-			if err != nil {
+			/*if err != nil {
 				log.Fatal(err)
 			}
-
+			*/
 			doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 			if err != nil {
 				log.Fatal(err)
@@ -204,13 +217,13 @@ func downLoadHotVideo(videoTypeStr string) {
 			if err != nil {
 				log.Println(err)
 			}
-			//https://www.xx.com/v.php?category=hot&viewtype=basic
+			//https://www.91porn.com/v.php?category=hot&viewtype=basic
 			doc.Find(".videos-text-align").Each(func(i int, s *goquery.Selection) {
 				urls, _ := s.Find("a").Attr("href")
 				values, err := url.ParseQuery(urls)
 				//videoType为0 可能执行的时候又有视频创建导致提前重复
 				if videoType != 0 && err == nil {
-					viewkey := values.Get("https://xx.com/view_video.php?viewkey")
+					viewkey := values.Get("https://91porn.com/view_video.php?viewkey")
 					//存在重复的 直接跳出循环，解决分页问题
 					if viewMap[viewkey] != "" {
 						flag = false
@@ -236,7 +249,7 @@ func downLoadHotVideo(videoTypeStr string) {
 */
 func getUserVideoPage(uid string) int {
 
-	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:51837", nil, proxy.Direct)
 	if err != nil {
 		fmt.Println("Error connecting to proxy:", err)
 	}
@@ -270,10 +283,10 @@ func getUserVideoPage(uid string) int {
 
 /**
 下载某个用户所有公开视频
-https://www.xx.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul&type=public&page=2
+https://www.91porn.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul&type=public&page=2
 */
 func downloadAllVideo(userId string, pageNumber int) {
-	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:51837", nil, proxy.Direct)
 	if err != nil {
 		fmt.Println("Error connecting to proxy:", err)
 	}
@@ -306,10 +319,10 @@ func downloadAllVideo(userId string, pageNumber int) {
 }
 
 /**
-https://www.xx.com/view_video.php?viewkey=d2e97bf0276d3f7ed6b0
+https://www.91porn.com/view_video.php?viewkey=d2e97bf0276d3f7ed6b0
 */
 func downloadSingleVideo(url string) {
-	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:51837", nil, proxy.Direct)
 	if err != nil {
 		fmt.Println("Error connecting to proxy:", err)
 	}
@@ -474,7 +487,7 @@ ffmpeg -i https://cdn.91p07.com//m3u8/424352/424352.m3u8 -c copy -bsf:a aac_adts
 */
 func downLoadNew(videoUrl string, saveFilePath string) {
 	//vip地址
-	//videoUrl = strings.ReplaceAll(videoUrl, "cdn.91p07.com", "cv.91p52.com")
+	videoUrl = strings.ReplaceAll(videoUrl, "cdn.91p07.com", "cv.killcovid2021.com")
 	binary, lookErr := exec.LookPath("ffmpeg")
 	if lookErr != nil {
 		panic(lookErr)
@@ -509,7 +522,7 @@ https://ccn.91p52.com/mp43/384739.mp4
 https://cdn.91p07.com//m3u8/425408/425408.m3u8
 */
 func checkVideoUrlIsOld(url string) bool {
-	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:1080", nil, proxy.Direct)
+	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:51837", nil, proxy.Direct)
 	if err != nil {
 		fmt.Println("Error connecting to proxy:", err)
 	}
@@ -520,7 +533,7 @@ func checkVideoUrlIsOld(url string) bool {
 		Transport: tr,
 	}
 
-	url = strings.ReplaceAll(url, "cdn.91p07.com", "cv.91p52.com")
+	//url = strings.ReplaceAll(url, "cdn.91p07.com", "cv.91p52.com")
 	res, err := myClient.Get(url)
 	if err != nil {
 		log.Println(err)
