@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/network"
 	"golang.org/x/net/context"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
@@ -26,12 +28,13 @@ const (
 	/**
 	用户公开的视频地址
 	*/
-	UserInfoUrl     = "https://www.91porn.com/uprofile.php?UID=$"
-	GirlPublicUrl   = "https://www.91porn.com/uvideos.php?UID=$&type=public"
-	VideoM3U8Url    = "https://cdn.91p07.com/m3u8/$/$.m3u8"
-	VideoMP4Url     = "https://ccn.91p52.com/mp43/$.mp4"
-	VideoUrl        = "https://www.91porn.com/view_video.php?viewkey="
-	HotVideIndexUrl = "https://www.91porn.com/v.php?"
+	UserInfoUrl           = "https://www.91porn.com/uprofile.php?UID=$"
+	GirlPublicUrl         = "https://www.91porn.com/uvideos.php?UID=$&type=public"
+	VideoM3U8Url          = "https://key91-1b2b1.kxcdn.com/m3u8/$/$.m3u8"
+	VideoMP4Url           = "https://ccn.91p52.com/mp43/$.mp4"
+	VideoUrl              = "https://www.91porn.com/view_video.php?viewkey="
+	HotVideIndexUrl       = "https://www.91porn.com/v.php?"
+	TodayRankVideIndexUrl = "https://www.91porn.com/index.php?"
 	//ffmpeg下载超时时间5分钟
 	FfmpegTimeOut = 5 * 60 * 1000000
 )
@@ -39,6 +42,7 @@ const (
 var videoList = make([]Video, 0)
 
 var videoTypeMap = map[int]string{
+	-1: "今日排行",
 	0:  "所有",
 	1:  "当前最热",
 	2:  "本月最热",
@@ -82,7 +86,8 @@ func main() {
 	savePath = savePath + "/"
 	flag.StringVar(&uid, "uid", "", "用户ID，https://www.91porn.com/uvideos.php?UID=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul ，例如 -uid=c24dDoGZBAnwUtBbHweSJB8W6ACe8c7sJyQOJ9Af4DQ4sxul")
 	flag.StringVar(&hotVideoType, "t", "", "视频类型"+
-		"0:所有"+
+		"-1:今日排行"+
+		"0:所有最新视频"+
 		"1: 91原创 "+
 		"2：当前最热 "+
 		"3：本月最热 "+
@@ -160,6 +165,9 @@ func downLoadHotVideo(videoTypeStr string) {
 	var htmlContent string
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(HotVideIndexUrl),
+		network.SetExtraHTTPHeaders(network.Headers(map[string]interface{}{
+			"accept-language": "zh-CN",
+		})),
 		//等待某个特定的元素出现
 		//chromedp.Sleep(2 * time.Second),
 		chromedp.OuterHTML(`document.querySelector("body")`, &htmlContent, chromedp.ByJSPath),
@@ -180,6 +188,9 @@ func downLoadHotVideo(videoTypeStr string) {
 		//视频从第6个开始
 		linkUrl := hotVoideoLinkNode.Get(videoType + 5).Attr[0].Val
 		maxPageNumber := 6000
+		if videoType == -1 {
+			linkUrl = TodayRankVideIndexUrl
+		}
 		if videoType == 0 {
 			linkUrl = HotVideIndexUrl
 		}
@@ -197,9 +208,11 @@ func downLoadHotVideo(videoTypeStr string) {
 			}
 			options = append(chromedp.DefaultExecAllocatorOptions[:], options...)
 			chromeCtx, cancel := chromedp.NewExecAllocator(context.Background(), options...)
-
 			ctx, cancel := chromedp.NewContext(chromeCtx)
 			err := chromedp.Run(ctx,
+				network.SetExtraHTTPHeaders(network.Headers(map[string]interface{}{
+					"accept-language": "zh-CN",
+				})),
 				chromedp.Navigate(linkUrl+"&page="+strconv.FormatInt(int64(pageNumer), 10)),
 				//等待某个特定的元素出现
 				//chromedp.Sleep(2 * time.Second),
@@ -304,7 +317,7 @@ func downloadAllVideo(userId string, pageNumber int) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		log.Println("status code error: %d %s", res.StatusCode, res.Status)
+		log.Println("status code error ", res.StatusCode, res.Status)
 	}
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
@@ -322,33 +335,49 @@ func downloadAllVideo(userId string, pageNumber int) {
 https://www.91porn.com/view_video.php?viewkey=d2e97bf0276d3f7ed6b0
 */
 func downloadSingleVideo(url string) {
-	dialSocksProxy, err := proxy.SOCKS5("tcp", "127.0.0.1:51837", nil, proxy.Direct)
-	if err != nil {
-		fmt.Println("Error connecting to proxy:", err)
-	}
-	tr := &http.Transport{Dial: dialSocksProxy.Dial}
 
-	// Create client
-	myClient := &http.Client{
-		Transport: tr,
+	options := []chromedp.ExecAllocatorOption{
+		chromedp.Flag("headless", true),
+		chromedp.Flag("hide-scrollbars", false),
+		chromedp.Flag("mute-audio", false),
+		chromedp.UserAgent(`Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36`),
 	}
+	options = append(chromedp.DefaultExecAllocatorOptions[:], options...)
+	chromeCtx, cancel := chromedp.NewExecAllocator(context.Background(), options...)
 
-	fmt.Printf("excute [%s] page track \n", url)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Add("accept-language", "zh-CN")
-	res, err := myClient.Do(req)
+	ctx, cancel := chromedp.NewContext(chromeCtx)
+	defer cancel()
+	var htmlContent string
+	err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			// create cookie expiration
+			expr := cdp.TimeSinceEpoch(time.Now().Add(180 * 24 * time.Hour))
+			// add cookies to chrome
+			err := network.SetCookie("language", "cn_CN").
+				WithExpires(&expr).
+				WithDomain("www.91porn.com").
+				WithHTTPOnly(true).
+				Do(ctx)
+			if err != nil {
+				return err
+			}
+			return nil
+		}),
+
+		chromedp.Navigate(url),
+		//等待某个特定的元素出现
+		//chromedp.Sleep(2 * time.Second),
+		chromedp.OuterHTML(`document.querySelector("body")`, &htmlContent, chromedp.ByJSPath),
+		//生成最终的html文件并保存在htmlContent文件中
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		log.Println("status code error: %d %s", res.StatusCode, res.Status)
-	}
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		log.Println(err)
-	}
 
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
+		log.Fatal(err)
+	}
 	userNameNodes := doc.Find(".title")
 	userName := ""
 	if userNameNodes != nil && len(userNameNodes.Nodes) > 0 && userNameNodes.Nodes[0].FirstChild != nil {
@@ -359,9 +388,10 @@ func downloadSingleVideo(url string) {
 	title := ""
 	if userTitleNodes != nil && len(userTitleNodes.Nodes) > 0 {
 		title = userTitleNodes.Nodes[0].FirstChild.Data
-		if title == " " {
+		if title == " " || title == "img" {
 			title = userTitleNodes.Nodes[0].LastChild.Data
 		}
+		title = strings.Replace(title, "\n", "", 1)
 		title = strings.Trim(title, " ")
 	}
 	//
@@ -378,8 +408,6 @@ func downloadSingleVideo(url string) {
 		createParentFile(userName)
 		downLoad(vid, title, userName, url, videoImage)
 	} else {
-		data, _ := ioutil.ReadAll(res.Body)
-		log.Println("status code error: %d %s %s", res.StatusCode, res.Status, string(data))
 		fmt.Println("skip video", url)
 	}
 }
